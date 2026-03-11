@@ -72049,9 +72049,15 @@ const createCamera = (position, target, fov) => {
     result.fov = fov;
     return result;
 };
-const createFrameCamera = (bbox, fov) => {
-    const sceneSize = bbox.halfExtents.length();
-    const distance = sceneSize / Math.sin(fov / 180 * Math.PI * 0.5);
+const createFrameCamera = (bbox, fov, aspect = 1, horizontalFov = false) => {
+    const sceneRadius = Math.max(bbox.halfExtents.length(), 1e-3);
+    const safeAspect = Math.max(aspect || 1, 1e-3);
+    const fovHalf = fov * math.DEG_TO_RAD * 0.5;
+    const horizontalHalfFov = horizontalFov ? fovHalf : Math.atan(Math.tan(fovHalf) * safeAspect);
+    const verticalHalfFov = horizontalFov ? Math.atan(Math.tan(fovHalf) / safeAspect) : fovHalf;
+    const containHalfFov = Math.max(Math.min(horizontalHalfFov, verticalHalfFov), 1e-3);
+    const fitScale = 0.9; // Less --> Model takes up more space on canvas
+    const distance = Math.max(sceneRadius / Math.sin(containHalfFov) * fitScale, 1e-3);
     return createCamera(new Vec3(2, 1, 2).normalize().mulScalar(distance).add(bbox.center), bbox.center, fov);
 };
 class CameraManager {
@@ -72061,8 +72067,10 @@ class CameraManager {
     constructor(global, bbox, collider = null) {
         const { events, settings, state } = global;
         const camera0 = settings.cameras[0].initial;
-        const frameCamera = createFrameCamera(bbox, camera0.fov);
-        const resetCamera = createCamera(new Vec3(camera0.position), new Vec3(camera0.target), camera0.fov);
+        const cameraComponent = global.camera.camera;
+        const frameCamera = createFrameCamera(bbox, camera0.fov, cameraComponent.aspectRatio, cameraComponent.horizontalFov);
+        const authoredCamera = createCamera(new Vec3(camera0.position), new Vec3(camera0.target), camera0.fov);
+        const resetCamera = bbox.containsPoint(authoredCamera.position) ? authoredCamera : frameCamera;
         const getAnimTrack = (initial, isObjectExperience) => {
             const { animTracks } = settings;
             // extract the camera animation track from settings
@@ -72077,8 +72085,8 @@ class CameraManager {
             }
             return null;
         };
-        // object experience starts outside the bounding box
-        const isObjectExperience = !bbox.containsPoint(resetCamera.position);
+        // object experience starts outside the bounding box (authored camera pose is outside the model bounds)
+        const isObjectExperience = !bbox.containsPoint(authoredCamera.position);
         const animTrack = getAnimTrack(settings.hasStartPose ? resetCamera : frameCamera, isObjectExperience);
         const controllers = {
             orbit: new OrbitController(),
