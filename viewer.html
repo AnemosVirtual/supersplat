@@ -72048,7 +72048,7 @@ const createFrameCamera = (bbox, fov, aspect = 1, horizontalFov = false) => {
     const horizontalHalfFov = horizontalFov ? fovHalf : Math.atan(Math.tan(fovHalf) * safeAspect);
     const verticalHalfFov = horizontalFov ? Math.atan(Math.tan(fovHalf) / safeAspect) : fovHalf;
     const containHalfFov = Math.max(Math.min(horizontalHalfFov, verticalHalfFov), 1e-3);
-    const fitScale = 0.9; // Less --> Model takes up more space on canvas
+    const fitScale = 0.95; // Less --> Model takes up more space on canvas
     const distance = Math.max(sceneRadius / Math.sin(containHalfFov) * fitScale, 1e-3);
     return createCamera(new Vec3(2, 1, 2).normalize().mulScalar(distance).add(bbox.center), bbox.center, fov);
 };
@@ -73348,13 +73348,9 @@ class Viewer {
         // reconfigure camera when entering/exiting XR
         app.xr.on('start', () => this.configureCamera(settings));
         app.xr.on('end', () => this.configureCamera(settings));
-        // handle horizontal fov on canvas resize
-        const updateHorizontalFov = () => {
-            camera.camera.horizontalFov = graphicsDevice.width > graphicsDevice.height;
-            app.renderNextFrame = true;
-        };
-        graphicsDevice.on('resizecanvas', updateHorizontalFov);
-        updateHorizontalFov();
+        // Keep vertical FOV semantics fixed across resizes to avoid introducing
+        // crop when a model was initially framed on a narrower viewport.
+        camera.camera.horizontalFov = false;
         // construct debug ministats
         if (config.ministats) {
             const options = MiniStats.getDefaultOptions();
