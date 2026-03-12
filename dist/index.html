@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>Anemos Virtual Viewer</title>
+	<meta charset="UTF-8">
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+	<style>
+		:root {
+			--canvas-opacity: 1;
+		}
+
+		* {
+			margin: 0;
+			padding: 0;
+			touch-action: none;
+		}
+
+		html,
+		body {
+			background-color: transparent;
+		}
+
+		body {
+			overflow: hidden;
+			font-family: "Arial", sans-serif;
+			-moz-user-select: none;
+			user-select: none;
+			-webkit-user-select: none;
+			-webkit-touch-callout: none;
+		}
+
+		canvas {
+			opacity: var(--canvas-opacity);
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+		}
+
+		button {
+			-webkit-appearance: none;
+			-moz-appearance: none;
+			appearance: none;
+		}
+
+		.hidden {
+			display: none !important;
+		}
+
+		.spacer {
+			flex-grow: 1;
+		}
+
+		#ui {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			pointer-events: none;
+			display: none;
+		}
+
+		#ui * {
+			pointer-events: auto;
+		}
+
+
+		#joystickBase {
+			position: absolute;
+			width: 64px;
+			height: 120px;
+			transform: translate(-50%, -50%);
+			border-radius: 32px;
+			touch-action: none;
+			background: linear-gradient(180deg, rgba(0, 0, 0, 0.2666666667) 0%, rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0) 70%, rgba(0, 0, 0, 0.2666666667) 100%);
+			background-color: rgba(0, 0, 0, 0.2);
+			border: 2px solid rgba(255, 255, 255, 0.2);
+			transition: width 0.2s ease, height 0.2s ease, border-radius 0.2s ease;
+		}
+
+		#joystickBase>#joystick {
+			position: absolute;
+			left: 8px;
+			width: 48px;
+			height: 48px;
+			border-radius: 50%;
+			touch-action: none;
+			background-color: rgba(255, 255, 255, 0.5333333333);
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+			transition: left 0.1s ease;
+		}
+
+		#joystickBase.mode-2d {
+			width: 120px;
+			height: 120px;
+			border-radius: 60px;
+			background: radial-gradient(circle, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.2666666667) 100%);
+			background-color: rgba(0, 0, 0, 0.2);
+		}
+
+		#joystickBase.mode-2d>#joystick {
+			left: 36px;
+		}
+
+		#tooltip {
+			display: none;
+			position: absolute;
+			border-radius: 4px;
+			padding: 4px 4px;
+			font-size: 12px;
+			color: #E0DCDD;
+			background-color: #282828;
+		}
+
+		#annotations {
+			position: fixed;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			pointer-events: none;
+			z-index: -1;
+		}
+
+		#annotations * {
+			pointer-events: auto;
+		}
+		
+		.anemos-label {
+			position: fixed;
+			bottom: 16px;
+			right: 24px;
+			font-size: 14px;
+			color: #666;
+			opacity: 0.6;
+			font-family: sans-serif;
+			pointer-events: auto;
+			z-index: 10000;
+		}
+
+		.anemos-label a {
+			color: inherit;
+			text-decoration: none;
+		}
+	</style>
+	<script type="module">
+		const createImage = (url) => {
+			const img = new Image();
+			img.src = url;
+			return img;
+		};
+
+		const url = new URL(location.href);
+
+		const posterUrl = url.searchParams.get('poster');
+		const skyboxUrl = url.searchParams.get('skybox');
+		const voxelUrl = url.searchParams.get('voxel');
+		const settingsUrl = url.searchParams.has('settings') ? url.searchParams.get('settings') : './settings.json';
+
+		const contentUrl = url.searchParams.has('content') ? `https://pub-69b1ea0f7bd74469a2e6f0a99f6a26b2.r2.dev/${url.searchParams.get('content')}.sog` : './scene.sog';
+
+		const sseConfig = {
+			poster: posterUrl && createImage(posterUrl),
+			skyboxUrl,
+			voxelUrl,
+			contentUrl,
+			contents: fetch(contentUrl),
+			noanim: url.searchParams.has('noanim'),
+			nofx: url.searchParams.has('nofx'),
+			hpr: url.searchParams.has('hpr') ? ['', '1', 'true', 'enable'].includes(url.searchParams.get('hpr')) : undefined,
+			ministats: url.searchParams.has('ministats'),
+			colorize: url.searchParams.has('colorize'),
+			unified: url.searchParams.has('unified'),
+			webgpu: url.searchParams.has('webgpu'),
+			gpusort: url.searchParams.has('gpusort'),
+			aa: url.searchParams.has('aa'),
+			heatmap: url.searchParams.has('heatmap'),
+		};
+
+		window.sse = {
+			config: sseConfig,
+			settings: { "camera": { "fov": 75, "position": [-2.6060588359832764, -0.8290486335754395, -0.1517719179391861], "target": [-0.07427059636963529, 0.1107844183450393, 0.060828285232002344], "startAnim": "none", "animTrack": null }, "background": { "color": [0, 0, 0, 0] }, "animTracks": [] }
+		};
+	</script>
+</head>
+
+<body>
+	<canvas id="application-canvas"></canvas>
+	<div class="anemos-label">
+		Powered by <a href="https://anemosvirtual.com" target="_blank" rel="noopener">Anemos Virtual</a>
+	</div>
+
+	<div id="ui">
+		<div id="poster"></div>
+
+		<!-- Loading Indicator -->
+		<div id="loadingWrap">
+			<div id="loadingText"></div>
+			<div id="loadingBar"></div>
+		</div>
+
+		<div id="controlsWrap" class="hidden">
+
+			<!-- Timeline Panel -->
+			<div id="timelineContainer" class="hidden">
+				<div id="line"></div>
+				<div id="handle"></div>
+				<div id="time" class="hidden">0:00</div>
+			</div>
+
+			<!-- Buttons Panel -->
+			<div id="buttonsContainer">
+				<div class="buttonGroup">
+					<button id="play" class="controlButton hidden">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#playIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#playIcon" />
+							</g>
+						</svg>
+					</button>
+					<button id="pause" class="controlButton hidden">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px">
+							<g class='stroke'>
+								<use href="#pauseIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#pauseIcon" />
+							</g>
+						</svg>
+					</button>
+				</div>
+
+				<div class="spacer"></div>
+
+				<div class="buttonGroup">
+					<button id="orbitCamera" class="controlButton toggle left">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#orbitIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#orbitIcon" />
+							</g>
+						</svg>
+					</button>
+					<button id="flyCamera" class="controlButton toggle right">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#flyIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#flyIcon" />
+							</g>
+						</svg>
+					</button>
+					<button id="fpsCamera" class="controlButton toggle right hidden">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#walkIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#walkIcon" />
+							</g>
+						</svg>
+					</button>
+				</div>
+
+				<div class="buttonGroup">
+					<button id="arMode" class="controlButton hidden">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#arIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#arIcon" />
+							</g>
+						</svg>
+					</button>
+					<button id="vrMode" class="controlButton hidden">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#vrIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#vrIcon" />
+							</g>
+						</svg>
+					</button>
+
+					<button id="showVoxels" class="controlButton hidden">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#voxelIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#voxelIcon" />
+							</g>
+						</svg>
+					</button>
+
+					<button id="info" class="controlButton">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#infoIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#infoIcon" />
+							</g>
+						</svg>
+					</button>
+					<button id="settings" class="controlButton">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#settingsIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#settingsIcon" />
+							</g>
+						</svg>
+					</button>
+
+					<button id="enterFullscreen" class="controlButton">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#enterFullscreenIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#enterFullscreenIcon" />
+							</g>
+						</svg>
+					</button>
+					<button id="exitFullscreen" class="controlButton hidden">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+							<g class='stroke'>
+								<use href="#exitFullscreenIcon" />
+							</g>
+							<g class='fill'>
+								<use href="#exitFullscreenIcon" />
+							</g>
+						</svg>
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Settings Panel -->
+		<div id="settingsPanel">
+			<div class="settingsRow">
+				<div id="hqCheck" class="checkMark">✓</div>
+				<div id="hqOption">High Quality Render</div>
+			</div>
+			<div class="settingsRow">
+				<div id="lqCheck" class="checkMark">✓</div>
+				<div id="lqOption">Low Quality Render</div>
+			</div>
+			<div class="divider"></div>
+			<div class="settingsRow">
+				<button id="frame">Frame</button>
+				<button id="reset">Reset</button>
+			</div>
+		</div>
+
+		<!-- Info Panel -->
+		<div id="infoPanel" class="hidden">
+			<div id="infoPanelContent" onpointerdown="event.stopPropagation()">
+				<div id="tabs">
+					<div id="desktopTab" class="tab active">Desktop</div>
+					<div id="touchTab" class="tab">Touch</div>
+				</div>
+				<div id="infoPanels">
+					<div id="desktopInfoPanel">
+						<div class="control-spacer"></div>
+						<h1>Orbit Mode</h1>
+						<div class="control-item">
+							<span class="control-action">Orbit</span>
+							<span class="control-key">Left Mouse</span>
+						</div>
+						<div class="control-item">
+							<span class="control-action">Zoom</span>
+							<span class="control-key">Mouse Wheel</span>
+						</div>
+						<div class="control-item">
+							<span class="control-action">Set Focus</span>
+							<span class="control-key">Double Click</span>
+						</div>
+						<div class="control-spacer"></div>
+						<h1>Fly Mode</h1>
+						<div class="control-item">
+							<span class="control-action">Look Around</span>
+							<span class="control-key">Left Mouse</span>
+						</div>
+						<div class="control-spacer"></div>
+						<div class="control-item">
+							<span class="control-action">Frame Scene</span>
+							<span class="control-key">F</span>
+						</div>
+						<div class="control-item">
+							<span class="control-action">Reset Camera</span>
+							<span class="control-key">R</span>
+						</div>
+					</div>
+					<div id="touchInfoPanel" class="hidden">
+						<div class="control-spacer"></div>
+						<h1>Orbit Mode</h1>
+						<div class="control-item">
+							<span class="control-action">Orbit</span>
+							<span class="control-key">One Finger Drag</span>
+						</div>
+						<div class="control-item">
+							<span class="control-action">Zoom</span>
+							<span class="control-key">Pinch</span>
+						</div>
+						<div class="control-item">
+							<span class="control-action">Set Focus</span>
+							<span class="control-key">Double Tap</span>
+						</div>
+						<div class="control-spacer"></div>
+						<h1>Fly Mode</h1>
+						<div class="control-item">
+							<span class="control-action">Look Around</span>
+							<span class="control-key">Touch on Right</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Touch Joystick -->
+		<div id="joystickBase" class="hidden">
+			<div id="joystick"></div>
+		</div>
+
+		<!-- Annotation Navigator -->
+		<div id="annotationNav" class="hidden">
+			<button id="annotationPrev">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+					<g class='stroke'>
+						<use href="#chevronLeftIcon" />
+					</g>
+					<g class='fill'>
+						<use href="#chevronLeftIcon" />
+					</g>
+				</svg>
+			</button>
+			<div id="annotationInfo">
+				<span id="annotationNavTitle"></span>
+			</div>
+			<button id="annotationNext">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+					<g class='stroke'>
+						<use href="#chevronRightIcon" />
+					</g>
+					<g class='fill'>
+						<use href="#chevronRightIcon" />
+					</g>
+				</svg>
+			</button>
+		</div>
+
+		<!-- Tooltip -->
+		<div id="tooltip"></div>
+	</div>
+
+	<script type="module" src="main.js"></script>
+</body>
+
+</html>
