@@ -15,18 +15,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Install build dependencies
-        run: npm install --no-save terser javascript-obfuscator
+      - name: Install dependencies
+        run: npm install
 
-      - name: Minify and obfuscate src/main.js
-        run: |
-          mkdir -p dist
-          npx terser src/main.js --compress --mangle --output dist/main.min.js
-          npx javascript-obfuscator dist/main.min.js --output dist/main.js
-          rm dist/main.min.js
+      - name: Build dist bundle
+        run: npm run build
 
-      - name: Deploy to Cloudflare
+      - name: Deploy to Cloudflare using Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
