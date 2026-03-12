@@ -1,0 +1,14 @@
+{
+  "name": "visor-v2",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm run build:main",
+    "build:main": "mkdir -p dist && cp index.html dist/index.html && npx terser src/main.js --compress --mangle --output dist/main.min.js && npx javascript-obfuscator dist/main.min.js --output dist/main.js && rm dist/main.min.js"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.1",
+    "terser": "^5.39.0",
+    "wrangler": "^4.6.0"
+  }
+}
